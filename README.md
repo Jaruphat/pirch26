@@ -1,12 +1,61 @@
 # 💬 PIRCH26 Revival
 
-**ห้องแชทย้อนยุคสไตล์ PIRCH98 / mIRC บน Windows 98** ใช้ผ่านเบราว์เซอร์ ไม่ต้องติดตั้งโปรแกรม
+<p align="center"><img src="docs/preview.gif" alt="PIRCH26 Revival — chat room, Winks, /slap and /kick" width="720"></p>
 
-*A retro, browser-based chat room inspired by the late-90s IRC client PIRCH98 — Windows 98 look, colored text, Winks, `/slap`, ops & kicks, a shared YouTube jukebox, chat bots, and mIRC-style personal scripts. Runs on Supabase (cloud) or as a self-hosted LAN server with zero dependencies.*
+<p align="center">
+  🎬 <a href="docs/PIRCH26_promo.mp4"><b>Watch the 1-minute promo video (MP4)</b></a> ·
+  🌐 <a href="https://pirch26.srv1118422.hstgr.cloud">Live demo</a> ·
+  🇹🇭 <a href="#ภาษาไทย">อ่านภาษาไทย</a>
+</p>
 
-> Fan-made เพื่อความสนุก ไม่เกี่ยวข้องกับผู้พัฒนา PIRCH ต้นฉบับ · สร้างร่วมกับ [Claude](https://claude.ai)
+A retro, browser-based chat room inspired by **PIRCH98**, the late-90s Windows IRC client.
+Windows 98 look, mIRC colors, Winks, `/slap`, @ops and `/kick`, a shared YouTube jukebox,
+chat bots and mIRC-style personal scripts — no install, just open a link.
+
+> Fan-made for fun and nostalgia. Not affiliated with the original PIRCH authors. Built together with [Claude](https://claude.ai).
+
+## Features
+- **Chat like 1999** — multiple rooms (create / delete), private messages, @op with `/op` `/deop` `/kick` `/topic`, `/whois`, `/away`, nick colors, a fake dial-up host in `/whois`
+- **Retro fun** — 13 full-screen Winks (including a fake *blue screen* prank), mIRC formatting (Ctrl+K / Ctrl+B / Ctrl+U, `/rainbow`), `/slap` with a random 90s object, 56k modem sound on connect — all sounds synthesized with WebAudio
+- **Jukebox** — `/play <YouTube link or song name>`: the whole room listens to the same song in sync; mini mode on mobile
+- **Bots** — DJ-Bot (`!play` searches YouTube), PIRCH-Bot (`!ดวง` daily fortune, `!8ball`, `!quiz` 90s trivia with scores, welcome messages)
+- **Personal scripts** (mIRC style, run only in your own browser) — `/alias`, `/on join`, `/autoreply`
+- **Safety** — server-side profanity filter (`/badword` admin list), flood protection, Row Level Security, CSP, no `innerHTML` for user text
+- Built-in manual (`/manual`), works on mobile, UI in Thai
+
+## Three ways to run
+
+| Mode | Use it for | Login | Needs |
+|---|---|---|---|
+| **Demo** | Try it alone | — | any static web server |
+| **LAN** | Office / home network, data stays on your machine | nick + password | Node.js 22.13+ **or** Docker |
+| **Supabase** | Friends over the internet | Google | a free Supabase project + static hosting |
+
+```bash
+# Demo
+cd public && python3 -m http.server 8080
+
+# LAN (first user to register becomes admin)
+docker compose -f docker-compose.lan.yml up -d --build      # or: node server/server.js
+# → open http://<server-ip>:8080 from any computer on the network
+```
+
+**Supabase mode:** run `supabase/schema.sql` (and `supabase/v4-bots.sql` for bots) in the SQL editor, enable the Google provider,
+copy `public/config.example.js` → `public/config.js` with your project URL and anon key, then host `public/` anywhere
+(or use `deploy/` for nginx + Traefik on a VPS). Bots in this mode run on **n8n**: import `n8n/pirch26-bots.json`.
+Full step-by-step instructions are in the Thai section below.
+
+**Tech stack:** vanilla HTML/CSS/JS + [98.css](https://github.com/jdan/98.css) · Supabase (Auth, Postgres + RLS, Realtime) ·
+LAN server on Node 22 (`node:sqlite` + Server-Sent Events, zero npm dependencies) · n8n for bots · nginx + Traefik.
+Bot logic lives in one file (`public/js/bots-core.js`) shared by the LAN server and the n8n workflow.
 
 ---
+
+<a id="ภาษาไทย"></a>
+# 🇹🇭 ภาษาไทย
+
+**ห้องแชทย้อนยุคสไตล์ PIRCH98 / mIRC บน Windows 98** ใช้ผ่านเบราว์เซอร์ ไม่ต้องติดตั้งโปรแกรม
+ดูวิดีโอแนะนำ 1 นาทีได้ที่ [docs/PIRCH26_promo.mp4](docs/PIRCH26_promo.mp4) · ลองเล่นที่ [pirch26.srv1118422.hstgr.cloud](https://pirch26.srv1118422.hstgr.cloud)
 
 ## เลือกวิธีรัน
 
@@ -110,6 +159,7 @@ supabase/*.sql          schema + RLS + triggers (รันซ้ำได้)
 n8n/                    workflow บอท + build script
 deploy/                 nginx + Traefik สำหรับโหมด Supabase บน VPS
 Dockerfile, docker-compose.lan.yml   โหมด LAN
+docs/                   วิดีโอโปรโมท + GIF ตัวอย่าง
 ```
 
 ## ความปลอดภัย
