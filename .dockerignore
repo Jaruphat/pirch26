@@ -1,0 +1,8 @@
+.git
+data
+promo
+node_modules
+public/config.js
+deploy
+supabase
+n8n

@@ -1,0 +1,18 @@
+# PIRCH26 (โหมด Supabase) — static site หลัง Traefik ที่มีอยู่แล้วบน VPS
+# ใช้: cd deploy && DOMAIN=chat.example.com docker compose -p pirch98 up -d
+# (Traefik ต้องเปิด docker provider + certresolver ชื่อ letsencrypt หรือกำหนด CERT_RESOLVER)
+services:
+  pirch98:
+    image: nginx:alpine
+    container_name: pirch98
+    restart: unless-stopped
+    volumes:
+      - ../public:/usr/share/nginx/html:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.pirch98.rule=Host(`${DOMAIN:?set DOMAIN}`)
+      - traefik.http.routers.pirch98.entrypoints=websecure
+      - traefik.http.routers.pirch98.tls=true
+      - traefik.http.routers.pirch98.tls.certresolver=${CERT_RESOLVER:-letsencrypt}
+      - traefik.http.services.pirch98.loadbalancer.server.port=80

@@ -1,0 +1,11 @@
+# secrets / per-deployment config
+public/config.js
+.env
+*.env.local
+# LAN server data (SQLite)
+data/
+# large media
+promo/*.mp4
+node_modules/
+.DS_Store
+Thumbs.db

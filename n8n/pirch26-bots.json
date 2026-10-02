@@ -1,0 +1,248 @@
+{
+  "id": "PIRCH26botsWF001",
+  "name": "PIRCH26 Bots",
+  "nodes": [
+    {
+      "id": "8deb94d5-1610-47e5-a2e6-05624690a1b3",
+      "name": "Chat event (from Supabase)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        300
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "pirch26-bots",
+        "authentication": "headerAuth",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "webhookId": "0d2c94b6-6956-4924-84be-a984fccc495f"
+    },
+    {
+      "id": "655936b5-19bc-4f4e-9401-35a0bc420755",
+      "name": "Bot brain",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        300
+      ],
+      "parameters": {
+        "jsCode": "// ---- generated from public/js/bots-core.js — edit that file, then run: node n8n/build.mjs ----\n// ===== PIRCH26 bots — shared logic =====\n// Pure JS (no DOM, no network). Used by:\n//   - server/server.js       (LAN mode, runs the bots itself)\n//   - n8n/pirch26-bots.json  (Supabase mode, this file is embedded in a Code node by n8n/build.mjs)\n// handleEvent() decides what the bots say; searching YouTube is done by the caller,\n// then searchResult() turns the search result into replies.\n\nconst BOTS = {\n  dj:    { id: '00000000-0000-4000-8000-00000000d0d0', nick: 'DJ-Bot',    color: 6,  quote: 'ขอเพลงได้เลย พิมพ์ !play ชื่อเพลง 🎵' },\n  pirch: { id: '00000000-0000-4000-8000-000000000b07', nick: 'PIRCH-Bot', color: 12, quote: 'พิมพ์ !help ดูว่าบอททำอะไรได้บ้าง 🤖' },\n};\nconst BOT_IDS = Object.values(BOTS).map(b => b.id);\nconst DEFAULT_ROOM = '#ห้องรวม';\n\nconst stripCodes = t => String(t || '').replace(/\\x03(\\d{1,2}(,\\d{1,2})?)?|[\\x02\\x0F\\x16\\x1D\\x1F]/g, '');\nconst norm = t => stripCodes(t).trim().toLowerCase().replace(/\\s+/g, ' ');\nfunction hash(s) { let h = 2166136261; for (const c of s) { h ^= c.codePointAt(0); h = Math.imul(h, 16777619) >>> 0; } return h; }\nconst pickBy = (arr, seed) => arr[seed % arr.length];\nconst pick = arr => arr[Math.floor(Math.random() * arr.length)];\n\nconst FORTUNE = {\n  love: ['คนที่แอบชอบกำลังรอให้คุณทักก่อน 💌', 'มีคนเก่าแวะเวียนมาทักในห้องแชท', 'โสดแต่ไม่เหงา เพราะมีเพื่อนใน #ห้องรวม', 'ระวังส่ง Wink ผิดคน 😳', 'ความรักหวานเหมือนโอวัลตินเย็น', 'ดวงคู่: คนที่ nick ขึ้นต้นด้วยตัวอักษรเดียวกับคุณ'],\n  work: ['งานเดินเร็วเหมือนเน็ตตอนตี 3', 'หัวหน้าอารมณ์ดี รีบขออะไรวันนี้เลย', 'ระวังกดส่งอีเมลก่อนแนบไฟล์', 'มีงานด่วนเข้ามา แต่ปิดได้ทันเวลา', 'ไอเดียดี ๆ จะมาตอนอาบน้ำ', 'ประชุมวันนี้สั้นกว่าที่คิด (ปาฏิหาริย์!)'],\n  money: ['มีเงินเข้าแบบไม่คาดคิด แม้จะแค่ 20 บาทในกระเป๋ากางเกง', 'ประหยัดได้ ถ้าไม่สั่งชานมไข่มุกแก้วที่สาม', 'ค่าเน็ตเดือนนี้ไม่บานปลาย', 'มีคนคืนเงินที่ยืมไปนานแล้ว', 'อย่าเพิ่งซื้อของที่อยู่ในตะกร้ามา 3 เดือน'],\n  color: ['ฟ้า Windows 98', 'เขียวจอ CRT', 'เทาเงิน (สีปุ่ม)', 'น้ำเงินกรมท่า', 'ชมพูบานเย็น', 'เหลือง Post-it'],\n  item: ['แผ่นดิสก์ 3.5 นิ้ว', 'บัตรเติมเงินมือถือ', 'ปากกาลูกลื่นที่ใช้กรอเทป', 'เมาส์ลูกกลิ้ง', 'โปสการ์ดดารา', 'เพจเจอร์'],\n};\nconst EIGHTBALL = ['แน่นอน 100%', 'ใช่เลย!', 'น่าจะใช่นะ', 'ถามใหม่อีกทีหลังเน็ตหลุด', 'ยังบอกไม่ได้ รอโมเด็มต่อติดก่อน', 'อย่าหวังเลย', 'ไม่น่าจะใช่', 'คำตอบคือ... ไม่!', 'ลองถามแม่ดูก่อน', 'ดวงบอกว่าใช่ แต่ใจบอกว่าไม่', 'ฟันธง: ได้!', 'เดี๋ยวก่อน... ขอคิดแป๊บ (ไม่ได้)'];\nconst QUOTES = ['เน็ตหลุดไม่ว่า ขอแค่ใจเราไม่หลุดจากกัน', 'รักแท้ไม่มีวัน Ping timeout', 'ชีวิตก็เหมือนโหลดรูป... ค่อย ๆ ขึ้นทีละบรรทัด', 'ความคิดถึงไม่ต้องใช้ชั่วโมงอินเทอร์เน็ต', 'คนที่ใช่ จะส่ง Wink มาเอง', 'อย่าลืม Save งานก่อนไฟดับ', 'บางคนเข้ามาในห้องแชทเพื่อคุย บางคนเข้ามาเพื่อสอนเราว่าต้อง /ignore', 'ถ้ารักจริง ต้องรอได้แม้ 56k'];\nconst QUIZ = [\n  { q: 'โมเด็มบ้านยุคนั้นเร็วสุดกี่ kbps?', a: ['56', '56k', '56kbps'] },\n  { q: 'Windows รุ่นที่ออกปี ค.ศ. 1998 ชื่อว่าอะไร?', a: ['98', 'windows 98', 'win98', 'วินโดว์ 98'] },\n  { q: 'แผ่นดิสก์ยุคนั้นมีขนาดกี่นิ้ว?', a: ['3.5', '3.5 นิ้ว', '3 นิ้วครึ่ง'] },\n  { q: 'แผ่นดิสก์ 3.5 นิ้ว (HD) จุได้ประมาณกี่ MB?', a: ['1.44', '1.44mb', '1.44 mb'] },\n  { q: 'IRC ย่อมาจากอะไร?', a: ['internet relay chat'] },\n  { q: 'a/s/l ที่ชอบถามกันในห้องแชท ย่อมาจากอะไร?', a: ['age sex location', 'age/sex/location', 'อายุ เพศ ที่อยู่'] },\n  { q: 'ICQ อ่านออกเสียงแล้วตรงกับประโยคภาษาอังกฤษว่าอะไร?', a: ['i seek you'] },\n  { q: 'Nokia รุ่นในตำนานที่มีเกมงูและทนทานสุด ๆ คือรุ่นอะไร?', a: ['3310', 'nokia 3310'] },\n  { q: 'เกมออนไลน์ที่ฮิตมากในไทยช่วงต้นยุค 2000 ที่ต้องไปตีโปริงคือเกมอะไร?', a: ['ragnarok', 'ro', 'แร็กนาร็อก', 'แรคนาร็อค'] },\n  { q: 'ปุ่มใน MSN Messenger ที่ทำให้หน้าต่างเพื่อนสั่น เรียกว่าอะไร?', a: ['nudge', 'สั่น', 'buzz'] },\n  { q: 'Google ก่อตั้งในปี ค.ศ. อะไร?', a: ['1998'] },\n  { q: 'โปรแกรมแชทในตำนานที่เรากำลังรำลึกถึง ชื่อเต็มคือ PIRCH อะไร?', a: ['98', 'pirch98'] },\n];\n\nconst HELP = [\n  '🤖 คำสั่งบอท (พิมพ์ในห้อง):',\n  '  !play ชื่อเพลง — DJ-Bot ค้นเพลงจาก YouTube แล้วเปิดให้ทั้งห้อง   ·   !np — เพลงที่เล่นอยู่',\n  '  !ดวง — ดูดวงประจำวัน   ·   !8ball คำถาม — ถามลูกแก้ววิเศษ   ·   !คำคม — คำคมยุค 56k',\n  '  !quiz — เกมตอบคำถามยุค 90   ·   !ตอบ คำตอบ   ·   !hint   ·   !เฉลย   ·   !score',\n];\n\n/**\n * @param {object} evt   { type:'message', room, to_user, sender, nick, kind, body } | { type:'new_user', nick }\n * @param {object} state persisted between calls (mutated)\n * @param {object} opt   { youtube: boolean, now: ms }\n * @returns {{ replies: Array<{bot,room,kind,body,target?}>, search: {room,query,by}|null }}\n */\nfunction handleEvent(evt, state, opt = {}) {\n  const now = opt.now ?? Date.now();\n  const out = { replies: [], search: null };\n  const say = (bot, room, body, kind = 'msg', target = null) => out.replies.push({ bot, room, kind, body: String(body).slice(0, 500), target });\n  state.np ??= {}; state.quiz ??= {}; state.scores ??= {};\n\n  if (evt.type === 'new_user') {\n    say('pirch', DEFAULT_ROOM, `🎉 ยินดีต้อนรับ ${evt.nick} สมาชิกใหม่ของ PIRCH26! พิมพ์ !help เพื่อดูว่าบอททำอะไรได้`);\n    return out;\n  }\n  if (evt.type !== 'message' || !evt.room || evt.to_user || BOT_IDS.includes(evt.sender)) return out;\n  if (evt.kind !== 'msg') return out;\n  const text = stripCodes(evt.body).trim();\n  if (!text.startsWith('!')) return out;\n  const [cmdRaw, ...rest] = text.slice(1).split(/\\s+/);\n  const cmd = cmdRaw.toLowerCase();\n  const arg = rest.join(' ').trim();\n  const room = evt.room, nick = evt.nick || 'ใครสักคน';\n\n  switch (cmd) {\n    case 'help': case 'ช่วย': case 'bot':\n      HELP.forEach(l => say('pirch', room, l));\n      break;\n\n    case 'play': case 'เปิด': case 'เพลง': {\n      if (!arg) { say('dj', room, `${nick}: พิมพ์ชื่อเพลงด้วยนะ เช่น !play ยังคิดถึง`); break; }\n      if (opt.youtube === false) { say('dj', room, '😢 เซิร์ฟเวอร์นี้ปิดการค้นเพลงไว้ (ไม่มี YouTube API key หรือไม่มีอินเทอร์เน็ต) — ใช้ /play ลิงก์YouTube แทนได้'); break; }\n      out.search = { room, query: arg.slice(0, 100), by: nick };\n      break;\n    }\n    case 'np': {\n      const n = state.np[room];\n      say('dj', room, n ? `🎵 Now playing: ${n.title} (ขอโดย ${n.by})` : 'ตอนนี้ยังไม่มีเพลงจาก DJ-Bot — ลอง !play ชื่อเพลง');\n      break;\n    }\n    case 'ดวง': case 'horoscope': case 'fortune': {\n      const day = new Date(now + 7 * 3600e3).toISOString().slice(0, 10); // วันตามเวลาไทย\n      const s = hash(`${nick.toLowerCase()}|${day}`);\n      say('pirch', room, `🔮 ดวงวันนี้ของ ${nick}: 💕 ${pickBy(FORTUNE.love, s)} · 💼 ${pickBy(FORTUNE.work, s >>> 3)} · 💰 ${pickBy(FORTUNE.money, s >>> 6)} · สีมงคล ${pickBy(FORTUNE.color, s >>> 9)} · ของนำโชค ${pickBy(FORTUNE.item, s >>> 12)}`);\n      break;\n    }\n    case '8ball': case 'ถาม': {\n      if (!arg) { say('pirch', room, `${nick}: ถามคำถามด้วยสิ เช่น !8ball พรุ่งนี้ฝนตกไหม`); break; }\n      say('pirch', room, `🎱 ${nick} ถามว่า \"${arg.slice(0, 120)}\" — ลูกแก้วตอบว่า: ${pick(EIGHTBALL)}`);\n      break;\n    }\n    case 'คำคม': case 'quote':\n      say('pirch', room, `💬 \"${pick(QUOTES)}\"`);\n      break;\n\n    case 'quiz': case 'ควิซ': {\n      const cur = state.quiz[room];\n      if (cur && now - cur.at < 120e3) { say('pirch', room, `❓ คำถามยังค้างอยู่: ${cur.q} (ตอบด้วย !ตอบ ...)`); break; }\n      const used = new Set((state.quizUsed ??= {})[room] || []);\n      let idx = QUIZ.findIndex((_, i) => !used.has(i));\n      if (idx < 0) { used.clear(); idx = Math.floor(Math.random() * QUIZ.length); }\n      const order = QUIZ.map((_, i) => i).filter(i => !used.has(i));\n      idx = order[Math.floor(Math.random() * order.length)] ?? idx;\n      used.add(idx); state.quizUsed[room] = [...used];\n      state.quiz[room] = { i: idx, q: QUIZ[idx].q, at: now };\n      say('pirch', room, `❓ QUIZ: ${QUIZ[idx].q}   (ตอบด้วย !ตอบ คำตอบ · ใบ้ !hint · ยอมแพ้ !เฉลย)`);\n      break;\n    }\n    case 'ตอบ': case 'a': case 'answer': {\n      const cur = state.quiz[room];\n      if (!cur) { say('pirch', room, 'ยังไม่มีคำถามนะ พิมพ์ !quiz เพื่อเริ่ม'); break; }\n      if (QUIZ[cur.i].a.includes(norm(arg))) {\n        const sc = (state.scores[room] ??= {});\n        sc[nick] = (sc[nick] || 0) + 1;\n        delete state.quiz[room];\n        say('pirch', room, `✅ ถูกต้อง! ${nick} ได้ 1 คะแนน (รวม ${sc[nick]}) 🎉  เล่นต่อ !quiz`);\n      } else say('pirch', room, `❌ ยังไม่ใช่นะ ${nick} ลองใหม่!`);\n      break;\n    }\n    case 'hint': case 'ใบ้': {\n      const cur = state.quiz[room];\n      if (!cur) break;\n      const a = QUIZ[cur.i].a[0];\n      say('pirch', room, `💡 ใบ้: ขึ้นต้นด้วย \"${[...a][0]}\" ยาว ${[...a].length} ตัวอักษร`);\n      break;\n    }\n    case 'เฉลย': case 'skip': {\n      const cur = state.quiz[room];\n      if (!cur) break;\n      delete state.quiz[room];\n      say('pirch', room, `📢 เฉลย: ${QUIZ[cur.i].a[0]}   (เล่นต่อ !quiz)`);\n      break;\n    }\n    case 'score': case 'คะแนน': {\n      const sc = Object.entries(state.scores[room] || {}).sort((a, b) => b[1] - a[1]).slice(0, 5);\n      say('pirch', room, sc.length ? `🏆 คะแนนห้อง ${room}: ${sc.map(([n, s], i) => `${i + 1}. ${n} (${s})`).join('  ')}` : 'ยังไม่มีใครได้คะแนนเลย พิมพ์ !quiz');\n      break;\n    }\n    default: break; // unknown ! command — stay quiet\n  }\n  return out;\n}\n\nconst decodeEntities = s => String(s || '').replace(/&(amp|lt|gt|quot|#39|#x27);/g, (_, e) => ({ amp: '&', lt: '<', gt: '>', quot: '\"', '#39': \"'\", '#x27': \"'\" }[e]));\n\n/** Turn a YouTube search result into DJ replies. result: { id, title } | null | { error } */\nfunction searchResult(search, result, state) {\n  state.np ??= {};\n  if (!result || result.error || !/^[A-Za-z0-9_-]{11}$/.test(result.id || '')) {\n    return [{ bot: 'dj', room: search.room, kind: 'msg', body: result?.error ? `😵 ค้นเพลงไม่สำเร็จ (${String(result.error).slice(0, 80)})` : `🤔 หาเพลง \"${search.query}\" ไม่เจอเลย ลองพิมพ์ชื่ออื่นดูนะ` }];\n  }\n  const title = decodeEntities(result.title).slice(0, 150);\n  state.np[search.room] = { title, by: search.by, id: result.id };\n  return [\n    { bot: 'dj', room: search.room, kind: 'msg', body: `🎵 จัดไป! \"${title}\" — ขอโดย ${search.by}` },\n    { bot: 'dj', room: search.room, kind: 'wink', body: `music:play:${result.id}` },\n  ];\n}\n\n/** Pick the first video from a YouTube Data API v3 search response. */\nfunction parseYouTubeSearch(json) {\n  if (json?.error) return { error: json.error.message || 'YouTube API error' };\n  const it = (json?.items || []).find(x => x?.id?.videoId);\n  return it ? { id: it.id.videoId, title: it.snippet?.title || it.id.videoId } : null;\n}\n\n// ---- n8n glue ----\nconst data = $getWorkflowStaticData('global');\ndata.bots = data.bots || {};\nconst evt = $input.first().json.body || {};\nconst r = handleEvent(evt, data.bots, { youtube: true });\nconst rows = r.replies.map(x => ({ json: { action: 'reply', room: x.room, kind: x.kind, body: x.body, sender: BOTS[x.bot].id } }));\nif (r.search) rows.push({ json: { action: 'search', search: r.search } });\nreturn rows;\n"
+      }
+    },
+    {
+      "id": "9349a630-a0f8-4e21-a4c2-c749dab8cd8b",
+      "name": "Need YouTube search?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        480,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "e3d496d1-1340-4db5-8beb-728d3ea227bf",
+              "leftValue": "={{ $json.action }}",
+              "rightValue": "search",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "7caaf6db-d142-49de-ae8d-4328a0967a10",
+      "name": "Search YouTube",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        720,
+        180
+      ],
+      "parameters": {
+        "url": "https://www.googleapis.com/youtube/v3/search",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "part",
+              "value": "snippet"
+            },
+            {
+              "name": "type",
+              "value": "video"
+            },
+            {
+              "name": "videoEmbeddable",
+              "value": "true"
+            },
+            {
+              "name": "maxResults",
+              "value": "1"
+            },
+            {
+              "name": "regionCode",
+              "value": "TH"
+            },
+            {
+              "name": "q",
+              "value": "={{ $json.search.query }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "acc82746-5d18-436f-afe4-3644eb69bb51",
+      "name": "DJ picks the song",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        180
+      ],
+      "parameters": {
+        "jsCode": "// ---- generated from public/js/bots-core.js — edit that file, then run: node n8n/build.mjs ----\n// ===== PIRCH26 bots — shared logic =====\n// Pure JS (no DOM, no network). Used by:\n//   - server/server.js       (LAN mode, runs the bots itself)\n//   - n8n/pirch26-bots.json  (Supabase mode, this file is embedded in a Code node by n8n/build.mjs)\n// handleEvent() decides what the bots say; searching YouTube is done by the caller,\n// then searchResult() turns the search result into replies.\n\nconst BOTS = {\n  dj:    { id: '00000000-0000-4000-8000-00000000d0d0', nick: 'DJ-Bot',    color: 6,  quote: 'ขอเพลงได้เลย พิมพ์ !play ชื่อเพลง 🎵' },\n  pirch: { id: '00000000-0000-4000-8000-000000000b07', nick: 'PIRCH-Bot', color: 12, quote: 'พิมพ์ !help ดูว่าบอททำอะไรได้บ้าง 🤖' },\n};\nconst BOT_IDS = Object.values(BOTS).map(b => b.id);\nconst DEFAULT_ROOM = '#ห้องรวม';\n\nconst stripCodes = t => String(t || '').replace(/\\x03(\\d{1,2}(,\\d{1,2})?)?|[\\x02\\x0F\\x16\\x1D\\x1F]/g, '');\nconst norm = t => stripCodes(t).trim().toLowerCase().replace(/\\s+/g, ' ');\nfunction hash(s) { let h = 2166136261; for (const c of s) { h ^= c.codePointAt(0); h = Math.imul(h, 16777619) >>> 0; } return h; }\nconst pickBy = (arr, seed) => arr[seed % arr.length];\nconst pick = arr => arr[Math.floor(Math.random() * arr.length)];\n\nconst FORTUNE = {\n  love: ['คนที่แอบชอบกำลังรอให้คุณทักก่อน 💌', 'มีคนเก่าแวะเวียนมาทักในห้องแชท', 'โสดแต่ไม่เหงา เพราะมีเพื่อนใน #ห้องรวม', 'ระวังส่ง Wink ผิดคน 😳', 'ความรักหวานเหมือนโอวัลตินเย็น', 'ดวงคู่: คนที่ nick ขึ้นต้นด้วยตัวอักษรเดียวกับคุณ'],\n  work: ['งานเดินเร็วเหมือนเน็ตตอนตี 3', 'หัวหน้าอารมณ์ดี รีบขออะไรวันนี้เลย', 'ระวังกดส่งอีเมลก่อนแนบไฟล์', 'มีงานด่วนเข้ามา แต่ปิดได้ทันเวลา', 'ไอเดียดี ๆ จะมาตอนอาบน้ำ', 'ประชุมวันนี้สั้นกว่าที่คิด (ปาฏิหาริย์!)'],\n  money: ['มีเงินเข้าแบบไม่คาดคิด แม้จะแค่ 20 บาทในกระเป๋ากางเกง', 'ประหยัดได้ ถ้าไม่สั่งชานมไข่มุกแก้วที่สาม', 'ค่าเน็ตเดือนนี้ไม่บานปลาย', 'มีคนคืนเงินที่ยืมไปนานแล้ว', 'อย่าเพิ่งซื้อของที่อยู่ในตะกร้ามา 3 เดือน'],\n  color: ['ฟ้า Windows 98', 'เขียวจอ CRT', 'เทาเงิน (สีปุ่ม)', 'น้ำเงินกรมท่า', 'ชมพูบานเย็น', 'เหลือง Post-it'],\n  item: ['แผ่นดิสก์ 3.5 นิ้ว', 'บัตรเติมเงินมือถือ', 'ปากกาลูกลื่นที่ใช้กรอเทป', 'เมาส์ลูกกลิ้ง', 'โปสการ์ดดารา', 'เพจเจอร์'],\n};\nconst EIGHTBALL = ['แน่นอน 100%', 'ใช่เลย!', 'น่าจะใช่นะ', 'ถามใหม่อีกทีหลังเน็ตหลุด', 'ยังบอกไม่ได้ รอโมเด็มต่อติดก่อน', 'อย่าหวังเลย', 'ไม่น่าจะใช่', 'คำตอบคือ... ไม่!', 'ลองถามแม่ดูก่อน', 'ดวงบอกว่าใช่ แต่ใจบอกว่าไม่', 'ฟันธง: ได้!', 'เดี๋ยวก่อน... ขอคิดแป๊บ (ไม่ได้)'];\nconst QUOTES = ['เน็ตหลุดไม่ว่า ขอแค่ใจเราไม่หลุดจากกัน', 'รักแท้ไม่มีวัน Ping timeout', 'ชีวิตก็เหมือนโหลดรูป... ค่อย ๆ ขึ้นทีละบรรทัด', 'ความคิดถึงไม่ต้องใช้ชั่วโมงอินเทอร์เน็ต', 'คนที่ใช่ จะส่ง Wink มาเอง', 'อย่าลืม Save งานก่อนไฟดับ', 'บางคนเข้ามาในห้องแชทเพื่อคุย บางคนเข้ามาเพื่อสอนเราว่าต้อง /ignore', 'ถ้ารักจริง ต้องรอได้แม้ 56k'];\nconst QUIZ = [\n  { q: 'โมเด็มบ้านยุคนั้นเร็วสุดกี่ kbps?', a: ['56', '56k', '56kbps'] },\n  { q: 'Windows รุ่นที่ออกปี ค.ศ. 1998 ชื่อว่าอะไร?', a: ['98', 'windows 98', 'win98', 'วินโดว์ 98'] },\n  { q: 'แผ่นดิสก์ยุคนั้นมีขนาดกี่นิ้ว?', a: ['3.5', '3.5 นิ้ว', '3 นิ้วครึ่ง'] },\n  { q: 'แผ่นดิสก์ 3.5 นิ้ว (HD) จุได้ประมาณกี่ MB?', a: ['1.44', '1.44mb', '1.44 mb'] },\n  { q: 'IRC ย่อมาจากอะไร?', a: ['internet relay chat'] },\n  { q: 'a/s/l ที่ชอบถามกันในห้องแชท ย่อมาจากอะไร?', a: ['age sex location', 'age/sex/location', 'อายุ เพศ ที่อยู่'] },\n  { q: 'ICQ อ่านออกเสียงแล้วตรงกับประโยคภาษาอังกฤษว่าอะไร?', a: ['i seek you'] },\n  { q: 'Nokia รุ่นในตำนานที่มีเกมงูและทนทานสุด ๆ คือรุ่นอะไร?', a: ['3310', 'nokia 3310'] },\n  { q: 'เกมออนไลน์ที่ฮิตมากในไทยช่วงต้นยุค 2000 ที่ต้องไปตีโปริงคือเกมอะไร?', a: ['ragnarok', 'ro', 'แร็กนาร็อก', 'แรคนาร็อค'] },\n  { q: 'ปุ่มใน MSN Messenger ที่ทำให้หน้าต่างเพื่อนสั่น เรียกว่าอะไร?', a: ['nudge', 'สั่น', 'buzz'] },\n  { q: 'Google ก่อตั้งในปี ค.ศ. อะไร?', a: ['1998'] },\n  { q: 'โปรแกรมแชทในตำนานที่เรากำลังรำลึกถึง ชื่อเต็มคือ PIRCH อะไร?', a: ['98', 'pirch98'] },\n];\n\nconst HELP = [\n  '🤖 คำสั่งบอท (พิมพ์ในห้อง):',\n  '  !play ชื่อเพลง — DJ-Bot ค้นเพลงจาก YouTube แล้วเปิดให้ทั้งห้อง   ·   !np — เพลงที่เล่นอยู่',\n  '  !ดวง — ดูดวงประจำวัน   ·   !8ball คำถาม — ถามลูกแก้ววิเศษ   ·   !คำคม — คำคมยุค 56k',\n  '  !quiz — เกมตอบคำถามยุค 90   ·   !ตอบ คำตอบ   ·   !hint   ·   !เฉลย   ·   !score',\n];\n\n/**\n * @param {object} evt   { type:'message', room, to_user, sender, nick, kind, body } | { type:'new_user', nick }\n * @param {object} state persisted between calls (mutated)\n * @param {object} opt   { youtube: boolean, now: ms }\n * @returns {{ replies: Array<{bot,room,kind,body,target?}>, search: {room,query,by}|null }}\n */\nfunction handleEvent(evt, state, opt = {}) {\n  const now = opt.now ?? Date.now();\n  const out = { replies: [], search: null };\n  const say = (bot, room, body, kind = 'msg', target = null) => out.replies.push({ bot, room, kind, body: String(body).slice(0, 500), target });\n  state.np ??= {}; state.quiz ??= {}; state.scores ??= {};\n\n  if (evt.type === 'new_user') {\n    say('pirch', DEFAULT_ROOM, `🎉 ยินดีต้อนรับ ${evt.nick} สมาชิกใหม่ของ PIRCH26! พิมพ์ !help เพื่อดูว่าบอททำอะไรได้`);\n    return out;\n  }\n  if (evt.type !== 'message' || !evt.room || evt.to_user || BOT_IDS.includes(evt.sender)) return out;\n  if (evt.kind !== 'msg') return out;\n  const text = stripCodes(evt.body).trim();\n  if (!text.startsWith('!')) return out;\n  const [cmdRaw, ...rest] = text.slice(1).split(/\\s+/);\n  const cmd = cmdRaw.toLowerCase();\n  const arg = rest.join(' ').trim();\n  const room = evt.room, nick = evt.nick || 'ใครสักคน';\n\n  switch (cmd) {\n    case 'help': case 'ช่วย': case 'bot':\n      HELP.forEach(l => say('pirch', room, l));\n      break;\n\n    case 'play': case 'เปิด': case 'เพลง': {\n      if (!arg) { say('dj', room, `${nick}: พิมพ์ชื่อเพลงด้วยนะ เช่น !play ยังคิดถึง`); break; }\n      if (opt.youtube === false) { say('dj', room, '😢 เซิร์ฟเวอร์นี้ปิดการค้นเพลงไว้ (ไม่มี YouTube API key หรือไม่มีอินเทอร์เน็ต) — ใช้ /play ลิงก์YouTube แทนได้'); break; }\n      out.search = { room, query: arg.slice(0, 100), by: nick };\n      break;\n    }\n    case 'np': {\n      const n = state.np[room];\n      say('dj', room, n ? `🎵 Now playing: ${n.title} (ขอโดย ${n.by})` : 'ตอนนี้ยังไม่มีเพลงจาก DJ-Bot — ลอง !play ชื่อเพลง');\n      break;\n    }\n    case 'ดวง': case 'horoscope': case 'fortune': {\n      const day = new Date(now + 7 * 3600e3).toISOString().slice(0, 10); // วันตามเวลาไทย\n      const s = hash(`${nick.toLowerCase()}|${day}`);\n      say('pirch', room, `🔮 ดวงวันนี้ของ ${nick}: 💕 ${pickBy(FORTUNE.love, s)} · 💼 ${pickBy(FORTUNE.work, s >>> 3)} · 💰 ${pickBy(FORTUNE.money, s >>> 6)} · สีมงคล ${pickBy(FORTUNE.color, s >>> 9)} · ของนำโชค ${pickBy(FORTUNE.item, s >>> 12)}`);\n      break;\n    }\n    case '8ball': case 'ถาม': {\n      if (!arg) { say('pirch', room, `${nick}: ถามคำถามด้วยสิ เช่น !8ball พรุ่งนี้ฝนตกไหม`); break; }\n      say('pirch', room, `🎱 ${nick} ถามว่า \"${arg.slice(0, 120)}\" — ลูกแก้วตอบว่า: ${pick(EIGHTBALL)}`);\n      break;\n    }\n    case 'คำคม': case 'quote':\n      say('pirch', room, `💬 \"${pick(QUOTES)}\"`);\n      break;\n\n    case 'quiz': case 'ควิซ': {\n      const cur = state.quiz[room];\n      if (cur && now - cur.at < 120e3) { say('pirch', room, `❓ คำถามยังค้างอยู่: ${cur.q} (ตอบด้วย !ตอบ ...)`); break; }\n      const used = new Set((state.quizUsed ??= {})[room] || []);\n      let idx = QUIZ.findIndex((_, i) => !used.has(i));\n      if (idx < 0) { used.clear(); idx = Math.floor(Math.random() * QUIZ.length); }\n      const order = QUIZ.map((_, i) => i).filter(i => !used.has(i));\n      idx = order[Math.floor(Math.random() * order.length)] ?? idx;\n      used.add(idx); state.quizUsed[room] = [...used];\n      state.quiz[room] = { i: idx, q: QUIZ[idx].q, at: now };\n      say('pirch', room, `❓ QUIZ: ${QUIZ[idx].q}   (ตอบด้วย !ตอบ คำตอบ · ใบ้ !hint · ยอมแพ้ !เฉลย)`);\n      break;\n    }\n    case 'ตอบ': case 'a': case 'answer': {\n      const cur = state.quiz[room];\n      if (!cur) { say('pirch', room, 'ยังไม่มีคำถามนะ พิมพ์ !quiz เพื่อเริ่ม'); break; }\n      if (QUIZ[cur.i].a.includes(norm(arg))) {\n        const sc = (state.scores[room] ??= {});\n        sc[nick] = (sc[nick] || 0) + 1;\n        delete state.quiz[room];\n        say('pirch', room, `✅ ถูกต้อง! ${nick} ได้ 1 คะแนน (รวม ${sc[nick]}) 🎉  เล่นต่อ !quiz`);\n      } else say('pirch', room, `❌ ยังไม่ใช่นะ ${nick} ลองใหม่!`);\n      break;\n    }\n    case 'hint': case 'ใบ้': {\n      const cur = state.quiz[room];\n      if (!cur) break;\n      const a = QUIZ[cur.i].a[0];\n      say('pirch', room, `💡 ใบ้: ขึ้นต้นด้วย \"${[...a][0]}\" ยาว ${[...a].length} ตัวอักษร`);\n      break;\n    }\n    case 'เฉลย': case 'skip': {\n      const cur = state.quiz[room];\n      if (!cur) break;\n      delete state.quiz[room];\n      say('pirch', room, `📢 เฉลย: ${QUIZ[cur.i].a[0]}   (เล่นต่อ !quiz)`);\n      break;\n    }\n    case 'score': case 'คะแนน': {\n      const sc = Object.entries(state.scores[room] || {}).sort((a, b) => b[1] - a[1]).slice(0, 5);\n      say('pirch', room, sc.length ? `🏆 คะแนนห้อง ${room}: ${sc.map(([n, s], i) => `${i + 1}. ${n} (${s})`).join('  ')}` : 'ยังไม่มีใครได้คะแนนเลย พิมพ์ !quiz');\n      break;\n    }\n    default: break; // unknown ! command — stay quiet\n  }\n  return out;\n}\n\nconst decodeEntities = s => String(s || '').replace(/&(amp|lt|gt|quot|#39|#x27);/g, (_, e) => ({ amp: '&', lt: '<', gt: '>', quot: '\"', '#39': \"'\", '#x27': \"'\" }[e]));\n\n/** Turn a YouTube search result into DJ replies. result: { id, title } | null | { error } */\nfunction searchResult(search, result, state) {\n  state.np ??= {};\n  if (!result || result.error || !/^[A-Za-z0-9_-]{11}$/.test(result.id || '')) {\n    return [{ bot: 'dj', room: search.room, kind: 'msg', body: result?.error ? `😵 ค้นเพลงไม่สำเร็จ (${String(result.error).slice(0, 80)})` : `🤔 หาเพลง \"${search.query}\" ไม่เจอเลย ลองพิมพ์ชื่ออื่นดูนะ` }];\n  }\n  const title = decodeEntities(result.title).slice(0, 150);\n  state.np[search.room] = { title, by: search.by, id: result.id };\n  return [\n    { bot: 'dj', room: search.room, kind: 'msg', body: `🎵 จัดไป! \"${title}\" — ขอโดย ${search.by}` },\n    { bot: 'dj', room: search.room, kind: 'wink', body: `music:play:${result.id}` },\n  ];\n}\n\n/** Pick the first video from a YouTube Data API v3 search response. */\nfunction parseYouTubeSearch(json) {\n  if (json?.error) return { error: json.error.message || 'YouTube API error' };\n  const it = (json?.items || []).find(x => x?.id?.videoId);\n  return it ? { id: it.id.videoId, title: it.snippet?.title || it.id.videoId } : null;\n}\n\n// ---- n8n glue ----\nconst data = $getWorkflowStaticData('global');\ndata.bots = data.bots || {};\nconst search = $('Bot brain').all().map(i => i.json).find(j => j.action === 'search').search;\nconst res = parseYouTubeSearch($input.first().json);\nreturn searchResult(search, res, data.bots).map(x => ({ json: { room: x.room, kind: x.kind, body: x.body, sender: BOTS[x.bot].id } }));\n"
+      }
+    },
+    {
+      "id": "f4b2486d-c1c2-4344-86b1-3f934739d0c6",
+      "name": "Bot says (insert message)",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1200,
+        320
+      ],
+      "parameters": {
+        "operation": "create",
+        "tableId": "messages",
+        "dataToSend": "defineBelow",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "room",
+              "fieldValue": "={{ $json.room }}"
+            },
+            {
+              "fieldId": "kind",
+              "fieldValue": "={{ $json.kind }}"
+            },
+            {
+              "fieldId": "body",
+              "fieldValue": "={{ $json.body }}"
+            },
+            {
+              "fieldId": "sender",
+              "fieldValue": "={{ $json.sender }}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "92a0c23f-29c8-46de-b6e1-31b5120a02b0",
+      "name": "README",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -60
+      ],
+      "parameters": {
+        "width": 760,
+        "height": 300,
+        "content": "## PIRCH26 Bots 🤖\nตั้ง credential 3 ตัวก่อนกด Active:\n1. **Chat event** → Header Auth: Name = `X-Pirch-Secret`, Value = รหัสลับเดียวกับใน bot_config ของ Supabase\n2. **Search YouTube** → Query Auth: Name = `key`, Value = YouTube Data API v3 key\n3. **Bot says** → Supabase API: Host = URL โปรเจกต์ Supabase, Service Role Secret = service_role key\n\nProduction URL ของ webhook นี้ → ใส่ใน `bot_config.webhook_url` (ดู supabase/v4-bots.sql)\nโค้ดบอทสร้างจาก public/js/bots-core.js — อย่าแก้ในนี้ ให้แก้ไฟล์นั้นแล้วรัน `node n8n/build.mjs`"
+      }
+    }
+  ],
+  "connections": {
+    "Chat event (from Supabase)": {
+      "main": [
+        [
+          {
+            "node": "Bot brain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bot brain": {
+      "main": [
+        [
+          {
+            "node": "Need YouTube search?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Need YouTube search?": {
+      "main": [
+        [
+          {
+            "node": "Search YouTube",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Bot says (insert message)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search YouTube": {
+      "main": [
+        [
+          {
+            "node": "DJ picks the song",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DJ picks the song": {
+      "main": [
+        [
+          {
+            "node": "Bot says (insert message)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

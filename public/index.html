@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>PIRCH26 Revival</title>
+  <meta name="description" content="ห้องแชทย้อนยุคสไตล์ PIRCH26 — ล็อกอินแล้วคุยกับเพื่อนได้เลย">
+  <meta name="theme-color" content="#008080">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%23000080'/%3E%3Cpath d='M3 4h10v6H8l-3 3v-3H3z' fill='%23ffff00'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="vendor/98.css">
+  <link rel="stylesheet" href="style.css">
+  <script src="config.js"></script>
+  <script src="vendor/supabase.js" defer></script>
+  <script type="module" src="js/app.js"></script>
+</head>
+<body>
+  <!-- ===== Desktop ===== -->
+  <div id="desktop">
+    <div class="desk-icon" data-act="about"><div class="ico">🖥️</div><span>My Computer</span></div>
+    <div class="desk-icon" data-act="open"><div class="ico">💬</div><span>PIRCH26</span></div>
+    <div class="desk-icon" data-act="help"><div class="ico">📄</div><span>อ่านก่อน.txt</span></div>
+  </div>
+
+  <!-- ===== Login dialog ===== -->
+  <div class="window dialog" id="login-dlg" hidden>
+    <div class="title-bar"><div class="title-bar-text">PIRCH26 Revival — Connect</div>
+      <div class="title-bar-controls"><button aria-label="Help" data-act="help"></button></div></div>
+    <div class="window-body">
+      <div class="login-hero">
+        <div class="logo">PIRCH<span>26</span></div>
+        <div class="logo-sub">~ Revival Edition ~</div>
+      </div>
+      <fieldset>
+        <legend>Server</legend>
+        <div class="field-row"><label style="width:60px">Server:</label><input type="text" id="login-server" readonly></div>
+        <div class="field-row"><label style="width:60px">Port:</label><input type="text" value="6667 (ใจ)" readonly style="width:90px"></div>
+      </fieldset>
+      <p class="login-note" id="login-note"></p>
+      <div class="dlg-buttons">
+        <button id="btn-login" class="default">🔌 Connect</button>
+      </div>
+      <div class="progress" id="login-progress" hidden>
+        <p id="login-progress-text">กำลังหมุนโทรศัพท์...</p>
+        <div class="bar"><div class="fill"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Nick setup dialog ===== -->
+  <div class="window dialog" id="nick-dlg" hidden>
+    <div class="title-bar"><div class="title-bar-text">ตั้งค่าผู้ใช้ (User Setup)</div></div>
+    <div class="window-body">
+      <div class="field-row-stacked">
+        <label for="nick-input">Nickname (2–20 ตัว ห้ามเว้นวรรค)</label>
+        <input id="nick-input" type="text" maxlength="20" autocomplete="off" placeholder="เช่น น้องหมี_2542">
+      </div>
+      <div class="field-row-stacked">
+        <label>สีตัวอักษรของคุณ</label>
+        <div class="swatches" id="color-grid"></div>
+      </div>
+      <div class="field-row-stacked">
+        <label for="quote-input">คำคม / สถานะ (โชว์ตอนมีคน /whois)</label>
+        <input id="quote-input" type="text" maxlength="120" placeholder="เช่น ~*~ รักแท้แพ้ใกล้ชิด ~*~">
+      </div>
+      <p class="preview">ตัวอย่าง: <span id="nick-preview"></span></p>
+      <p class="err" id="nick-err"></p>
+      <div class="dlg-buttons">
+        <button id="nick-cancel">ยกเลิก</button>
+        <button id="nick-save" class="default">ตกลง</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Main app window ===== -->
+  <div class="window" id="app" hidden>
+    <div class="title-bar">
+      <div class="title-bar-text"><span class="tb-ico">💬</span> <span id="title-text">PIRCH26 Revival</span></div>
+      <div class="title-bar-controls">
+        <button aria-label="Minimize" data-act="minimize"></button>
+        <button aria-label="Maximize" data-act="noop"></button>
+        <button aria-label="Close" data-act="quit"></button>
+      </div>
+    </div>
+    <div class="menubar" id="menubar"></div>
+    <div class="toolbar">
+      <button data-act="join" title="เข้าห้อง">#️⃣ <span>Join</span></button>
+      <button data-act="list" title="รายชื่อห้อง">📋 <span>List</span></button>
+      <button data-act="part" title="ออกจากห้อง">🚪 <span>Part</span></button>
+      <span class="sep"></span>
+      <button data-act="winks" id="btn-winks" title="Winks">😉 <span>Winks</span></button>
+      <button data-act="music" title="เปิดเพลง YouTube ให้ทั้งห้องฟัง">🎵 <span>เพลง</span></button>
+      <button data-act="colors" id="btn-colors" title="แทรกสี">🎨 <span>สี</span></button>
+      <button data-act="bold" title="ตัวหนา (Ctrl+B)"><b>B</b></button>
+      <button data-act="underline" title="ขีดเส้นใต้ (Ctrl+U)"><u>U</u></button>
+      <span class="sep"></span>
+      <button data-act="sound" id="btn-sound" title="เสียง">🔊</button>
+      <button data-act="nicks" class="only-mobile" title="รายชื่อคน">👥</button>
+      <button data-act="settings" title="ตั้งค่า nick/สี">⚙️</button>
+      <button data-act="help" title="คำสั่ง">❓</button>
+    </div>
+    <div class="window-body">
+      <div class="workspace">
+        <nav class="tree sunken" id="tree" aria-label="หน้าต่าง"></nav>
+        <section class="chat">
+          <div class="topic" id="topic"></div>
+          <div class="logs sunken" id="logs"></div>
+        </section>
+        <aside class="nicks sunken" id="nicks">
+          <div class="nicks-head" id="nicks-head"></div>
+          <ul id="nicklist"></ul>
+        </aside>
+      </div>
+      <form class="inputbar" id="input-form" autocomplete="off">
+        <input id="input" type="text" enterkeyhint="send" placeholder="พิมพ์ข้อความ หรือ /help">
+        <button type="submit">ส่ง</button>
+      </form>
+    </div>
+    <div class="status-bar">
+      <p class="status-bar-field" id="st-conn">ไม่ได้เชื่อมต่อ</p>
+      <p class="status-bar-field" id="st-users">0 คนออนไลน์</p>
+      <p class="status-bar-field" id="st-lag">Lag: -</p>
+    </div>
+  </div>
+
+  <!-- ===== Popups ===== -->
+  <div class="window popup" id="winks-pop" hidden>
+    <div class="title-bar"><div class="title-bar-text">Winks</div>
+      <div class="title-bar-controls"><button aria-label="Close" data-close="winks-pop"></button></div></div>
+    <div class="window-body winks-grid" id="winks-grid"></div>
+  </div>
+  <div class="window popup" id="color-pop" hidden>
+    <div class="title-bar"><div class="title-bar-text">แทรกสี (Ctrl+K)</div>
+      <div class="title-bar-controls"><button aria-label="Close" data-close="color-pop"></button></div></div>
+    <div class="window-body">
+      <div class="swatches" id="color-pop-grid"></div>
+      <button id="btn-rainbow" style="margin-top:6px;width:100%">🌈 สีรุ้งทั้งประโยค</button>
+    </div>
+  </div>
+  <ul class="menu" id="ctx" hidden></ul>
+  <ul class="menu" id="dropdown" hidden></ul>
+
+  <!-- Generic message box / prompt -->
+  <div class="modal-bg" id="modal-bg" hidden>
+    <div class="window dialog" id="msgbox">
+      <div class="title-bar"><div class="title-bar-text" id="mb-title"></div>
+        <div class="title-bar-controls"><button aria-label="Close" id="mb-x"></button></div></div>
+      <div class="window-body">
+        <div class="mb-row"><div class="mb-ico" id="mb-ico"></div><div class="mb-text" id="mb-text"></div></div>
+        <input type="text" id="mb-input" hidden>
+        <div class="dlg-buttons">
+          <button id="mb-cancel">ยกเลิก</button>
+          <button id="mb-ok" class="default">ตกลง</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Manual (Notepad) -->
+  <div class="window notepad" id="manual" hidden>
+    <div class="title-bar"><div class="title-bar-text">📝 คู่มือ.txt - Notepad</div>
+      <div class="title-bar-controls"><button aria-label="Close" data-close="manual"></button></div></div>
+    <div class="np-menu"><span>File</span><span>Edit</span><span>Search</span><span>Help</span></div>
+    <div class="window-body np-body"><pre class="sunken" id="manual-text"></pre>
+      <div class="dlg-buttons"><button data-close="manual" class="default">ปิด</button></div></div>
+  </div>
+
+  <div id="fx"></div>
+
+  <!-- ===== Taskbar ===== -->
+  <div id="taskbar">
+    <button id="start-btn"><b>🪟 Start</b></button>
+    <div id="tasks"></div>
+    <div id="tray"><span id="tray-sound" title="เสียง">🔊</span><span id="clock"></span></div>
+  </div>
+  <ul class="menu start-menu" id="start-menu" hidden></ul>
+</body>
+</html>

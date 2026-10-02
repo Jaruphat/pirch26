@@ -1,0 +1,18 @@
+# PIRCH26 สำหรับใช้ใน LAN ออฟฟิศ
+#   docker compose -f docker-compose.lan.yml up -d --build
+#   แล้วเปิด http://<IP เครื่องนี้>:8080 จากเครื่องอื่นในวง LAN
+services:
+  pirch26:
+    build: .
+    container_name: pirch26-lan
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      SERVER_NAME: ${SERVER_NAME:-irc.office.lan}
+      # ถ้าออฟฟิศออกเน็ตได้และอยากให้ DJ-Bot ค้นเพลงได้ ใส่ YouTube Data API key:
+      YOUTUBE_API_KEY: ${YOUTUBE_API_KEY:-}
+    volumes:
+      - pirch26-data:/app/data
+volumes:
+  pirch26-data:
